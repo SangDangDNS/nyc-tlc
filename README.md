@@ -3,6 +3,17 @@
 This project will use dataset of [NYC TLC](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page) to find meaningful insights from raw data.  
 [Yellow Taxi Trip Records](https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2021-01.parquet) (PARQUET) for January 2021.
 
+### Architecture  
+Technologies used in this project:    
+
+Containerization: Docker    
+Infrastructure as Code: Terraform    
+Workflow Orchestrator: Mage AI    
+Transformation Framework: DBT      
+Data Lake: Google Cloud Storage    
+Data Warehouse: Google BigQuery    
+BI tool: Metabase    
+
 ### Instruction:
 #### Ingestion Data
 First of all, we need to create a virtual environment for this project by command: `python -m venv .myenv` and then
