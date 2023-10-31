@@ -2,13 +2,16 @@ import os
 from time import time
 from dotenv import load_dotenv
 
+
 # Load the environment variables from .env file
 load_dotenv()
 
 import pandas as pd
 from sqlalchemy import create_engine
 
+from prefect import flow,task
 
+@task(log_prints=True, retries=3)
 def ingest():
     # the backup files are gzipped, and it's important to keep the correct extension
     # for pandas to be able to open the file
@@ -57,5 +60,10 @@ def ingest():
             break
 
 
-if __name__ == '__main__':
+@flow(name="Ingest Flow")
+def main_flow():
     ingest()
+
+
+if __name__ == '__main__':
+    main_flow()

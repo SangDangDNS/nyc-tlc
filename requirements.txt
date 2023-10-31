@@ -3,3 +3,11 @@ pyarrow
 python-dotenv
 sqlalchemy
 psycopg2
+
+prefect
+prefect-sqlalchemy
+prefect-gcp[cloud_storage]
+protobuf
+pandas-gbq
+
+mage-ai

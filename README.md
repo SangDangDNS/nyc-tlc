@@ -498,4 +498,272 @@ Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
 ![img_13.png](imgs%2Fimg_13.png)  
 ![img_14.png](imgs%2Fimg_14.png)  
 
+#### Workflow Orchestration with Prefect:
+We will add some module to install in `requirements.txt`
+```text
+prefect==2.7.7
+prefect-sqlalchemy==0.2.2
+prefect-gcp[cloud_storage]==0.2.4
+protobuf==4.21.11
+pandas-gbq==0.18.1
+```
+File `requirements.txt`:
+```text
+pandas
+pyarrow
+python-dotenv
+sqlalchemy
+psycopg2
 
+prefect
+prefect-sqlalchemy
+prefect-gcp[cloud_storage]lexical-list-403307-7b571bc76a77
+protobuf
+pandas-gbq
+
+```
+Start Mage.ai by command: `mage start ny_tx_project/`  
+We will create a ETL pipeline like this:
+![img_15.png](imgs%2Fimg_15.png)  
+File `get_data.py` in folder `data_loaders`:
+```text
+import os
+import pandas as pd
+from time import time
+from dotenv import load_dotenv
+
+# Load the environment variables from .env file
+load_dotenv()
+
+if 'data_loader' not in globals():
+    from mage_ai.data_preparation.decorators import data_loader
+if 'test' not in globals():
+    from mage_ai.data_preparation.decorators import test
+
+
+@data_loader
+def load_data_from_url():
+    """
+    Template for loading data from url
+    """
+    url = os.getenv("url")
+    
+    if url.endswith('.csv.gz'):
+        file_name = 'output.csv.gz'
+    elif url.endswith('.parquet'):
+        file_name = 'output.parquet'
+    else:
+        file_name = 'output.csv'
+
+    os.system(f"wget {url} -O {file_name}")
+    if url.endswith('.parquet'):
+        df = pd.read_parquet(file_name)
+        file_name = 'output.csv.gz'
+        df.to_csv(file_name, index=False, compression="gzip")
+
+    df = pd.read_csv(file_name)
+
+    return df
+
+
+@test
+def test_output(output, *args) -> None:
+    """
+    Template code for testing the output of the block.
+    """
+    assert output is not None, 'The output is undefined'
+
+```  
+File `transform_data.py` in folder `transfomers`:
+```text
+import pandas as pd
+
+if 'transformer' not in globals():
+    from mage_ai.data_preparation.decorators import transformer
+if 'test' not in globals():
+    from mage_ai.data_preparation.decorators import test
+
+
+@transformer
+def transform(df, *args, **kwargs):
+    """
+    Template code for a transformer block.
+
+    Add more parameters to this function if this block has multiple parent blocks.
+    There should be one parameter for each output variable from each parent block.
+
+    Args:
+        data: The output from the upstream parent block
+        args: The output from any additional upstream blocks (if applicable)
+
+    Returns:
+        Anything (e.g. data frame, dictionary, array, int, str, etc.)
+    """
+    # Specify your transformation logic here
+
+    print(f"pre: missing passenger count: {df['passenger_count'].isin([0]).sum()}")
+    df = df[df['passenger_count'] != 0]
+    print(f"post: missing passenger count: {df['passenger_count'].isin([0]).sum()}")
+    df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
+    df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
+    return df
+
+
+@test
+def test_output(output, *args) -> None:
+    """
+    Template code for testing the output of the block.
+    """
+    assert output is not None, 'The output is undefined'
+
+```   
+File `load_to_big_query.py` in folder `data_exporters`:
+```text
+from mage_ai.settings.repo import get_repo_path
+from mage_ai.io.bigquery import BigQuery
+from mage_ai.io.config import ConfigFileLoader
+from pandas import DataFrame
+from os import path
+
+if 'data_exporter' not in globals():
+    from mage_ai.data_preparation.decorators import data_exporter
+
+
+@data_exporter
+def export_data_to_big_query(df: DataFrame, **kwargs) -> None:
+    """
+    Template for exporting data to a BigQuery warehouse.
+    Specify your configuration settings in 'io_config.yaml'.
+
+    Docs: https://docs.mage.ai/design/data-loading#bigquery
+    """
+    table_id = 'lexical-list-403307.trips_data_all.yellow_trips'
+    config_path = path.join(get_repo_path(), 'io_config.yaml')
+    config_profile = 'default'
+
+    BigQuery.with_config(ConfigFileLoader(config_path, config_profile)).export(
+        df,
+        table_id,
+        if_exists='replace',  # Specify resolution policy if table name already exists
+    )
+
+```
+Because connect to Big Query, so we need to setup somethings like in `io_config.yaml` file:
+```text
+version: 0.1.1
+default:
+  # Default profile created for data IO access.
+  # Add your credentials for the source you use, and delete the rest.
+  # AWS
+  AWS_ACCESS_KEY_ID: "{{ env_var('AWS_ACCESS_KEY_ID') }}"
+  AWS_SECRET_ACCESS_KEY: "{{ env_var('AWS_SECRET_ACCESS_KEY') }}"
+  AWS_SESSION_TOKEN: session_token (Used to generate Redshift credentials)
+  AWS_REGION: region
+  # Azure
+  AZURE_CLIENT_ID: "{{ env_var('AZURE_CLIENT_ID') }}"
+  AZURE_CLIENT_SECRET: "{{ env_var('AZURE_CLIENT_SECRET') }}"
+  AZURE_STORAGE_ACCOUNT_NAME: "{{ env_var('AZURE_STORAGE_ACCOUNT_NAME') }}"
+  AZURE_TENANT_ID: "{{ env_var('AZURE_TENANT_ID') }}"
+  # Clickhouse
+  CLICKHOUSE_DATABASE: default
+  CLICKHOUSE_HOST: host.docker.internal
+  CLICKHOUSE_INTERFACE: http
+  CLICKHOUSE_PASSWORD: null
+  CLICKHOUSE_PORT: 8123
+  CLICKHOUSE_USERNAME: null
+  # Druid
+  DRUID_HOST: hostname
+  DRUID_PASSWORD: password
+  DRUID_PATH: /druid/v2/sql/
+  DRUID_PORT: 8082
+  DRUID_SCHEME: http
+  DRUID_USER: user
+  # DuckDB
+  DUCKDB_DATABASE: database
+  DUCKDB_SCHEMA: main
+  # Google
+#  GOOGLE_SERVICE_ACC_KEY:
+#    type: service_account
+#    project_id: project-id
+#    private_key_id: key-id
+#    private_key: "-----BEGIN PRIVATE KEY-----\nyour_private_key\n-----END_PRIVATE_KEY"
+#    client_email: your_service_account_email
+#    auth_uri: "https://accounts.google.com/o/oauth2/auth"
+#    token_uri: "https://accounts.google.com/o/oauth2/token"
+#    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs"
+#    client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/your_service_account_email"
+  GOOGLE_SERVICE_ACC_KEY_FILEPATH: "/home/sang/Desktop/Learning/Project/nyc-tlc/cred/google_credentials.json"
+#   GOOGLE_LOCATION: US # Optional
+  # MongoDB
+  # Specify either the connection string or the (host, password, user, port) to connect to MongoDB.
+  MONGODB_CONNECTION_STRING: "mongodb://{username}:{password}@{host}:{port}/"
+  MONGODB_HOST: host
+  MONGODB_PORT: 27017
+  MONGODB_USER: user
+  MONGODB_PASSWORD: password
+  MONGODB_DATABASE: database
+  MONGODB_COLLECTION: collection
+  # MSSQL
+  MSSQL_DATABASE: database
+  MSSQL_SCHEMA: schema
+  MSSQL_DRIVER: "ODBC Driver 18 for SQL Server"
+  MSSQL_HOST: host
+  MSSQL_PASSWORD: password
+  MSSQL_PORT: 1433
+  MSSQL_USER: SA
+  # MySQL
+  MYSQL_DATABASE: database
+  MYSQL_HOST: host
+  MYSQL_PASSWORD: password
+  MYSQL_PORT: 3306
+  MYSQL_USER: root
+  # PostgresSQL
+  POSTGRES_CONNECT_TIMEOUT: 10
+  POSTGRES_DBNAME: postgres
+  POSTGRES_SCHEMA: public # Optional
+  POSTGRES_USER: username
+  POSTGRES_PASSWORD: password
+  POSTGRES_HOST: hostname
+  POSTGRES_PORT: 5432
+  # Redshift
+  REDSHIFT_SCHEMA: public # Optional
+  REDSHIFT_DBNAME: redshift_db_name
+  REDSHIFT_HOST: redshift_cluster_id.identifier.region.redshift.amazonaws.com
+  REDSHIFT_PORT: 5439
+  REDSHIFT_TEMP_CRED_USER: temp_username
+  REDSHIFT_TEMP_CRED_PASSWORD: temp_password
+  REDSHIFT_DBUSER: redshift_db_user
+  REDSHIFT_CLUSTER_ID: redshift_cluster_id
+  REDSHIFT_IAM_PROFILE: default
+  # Snowflake
+  SNOWFLAKE_USER: username
+  SNOWFLAKE_PASSWORD: password
+  SNOWFLAKE_ACCOUNT: account_id.region
+  SNOWFLAKE_DEFAULT_WH: null                  # Optional default warehouse
+  SNOWFLAKE_DEFAULT_DB: null                  # Optional default database
+  SNOWFLAKE_DEFAULT_SCHEMA: null              # Optional default schema
+  SNOWFLAKE_PRIVATE_KEY_PASSPHRASE: null      # Optional private key passphrase
+  SNOWFLAKE_PRIVATE_KEY_PATH: null            # Optional private key path
+  SNOWFLAKE_ROLE: null                        # Optional role name
+  SNOWFLAKE_TIMEOUT: null                     # Optional timeout in seconds
+  # Trino
+  trino:
+    catalog: postgresql                       # Change this to the catalog of your choice
+    host: 127.0.0.1
+    http_headers:
+      X-Something: 'mage=power'
+    http_scheme: http
+    password: mage1337                        # Optional
+    port: 8080
+    schema: core_data
+    session_properties:                       # Optional
+      acc01.optimize_locality_enabled: false
+      optimize_hash_generation: true
+    source: trino-cli                         # Optional
+    user: admin
+    verify: /path/to/your/ca.crt              # Optional
+
+```
+Start schedule  
+![img_16.png](imgs%2Fimg_16.png)
+![img_17.png](imgs%2Fimg_17.png)
