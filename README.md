@@ -6,13 +6,13 @@ This project will use dataset of [NYC TLC](https://www.nyc.gov/site/tlc/about/tl
 ### Architecture  
 Technologies used in this project:    
 
-Containerization: Docker    
-Infrastructure as Code: Terraform    
-Workflow Orchestrator: Mage AI    
-Transformation Framework: DBT      
-Data Lake: Google Cloud Storage    
-Data Warehouse: Google BigQuery    
-BI tool: Metabase    
+- Containerization: Docker    
+- Infrastructure as Code: Terraform    
+- Workflow Orchestrator: Mage AI    
+- Transformation Framework: DBT      
+- Data Lake: Google Cloud Storage    
+- Data Warehouse: Google BigQuery    
+- BI tool: Metabase    
 
 ### Instruction:
 #### Ingestion Data
